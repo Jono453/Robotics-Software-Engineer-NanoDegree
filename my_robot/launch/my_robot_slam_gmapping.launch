@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<launch>
+  <!-- SLAM gMapping Node -->
+  <node pkg="gmapping" type="slam_gmapping" name="slam_gmappping" output="screen">
+      <param name="base_frame" type="string" value="robot_footprint"/>
+	  <param name="odom_frame" type="string" value="odom"/>
+      <remap from="scan" to="/scan"/>      
+  </node>
+</launch>
+
+
