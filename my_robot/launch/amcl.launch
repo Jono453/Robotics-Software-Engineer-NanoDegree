@@ -35,4 +35,8 @@
     <rosparam file="$(find my_robot)/config/base_local_planner_params.yaml" command="load"/>
   </node>
 
+  <!-- RVIZ -->
+  <node name="rviz" pkg= "rviz" type="rviz" output="screen" args="-d $(find my_robot)/home_service_rviz.rviz">
+  </node>
+
 </launch>

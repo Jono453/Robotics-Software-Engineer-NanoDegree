@@ -7,6 +7,8 @@ First Goal = desired pickup goal (1.0,6.5)
 Second Goal = desired drop off goal (-0.4,-4.8)
 */
 
+#define DEBUG 1
+
 #define PICKUP_X_GOAL 1.0
 #define PICKUP_Y_GOAL 6.5
 #define DROPOFF_X_GOAL -0.4
@@ -23,19 +25,20 @@ void checkGoalProximity(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr
 	//ROS_INFO("Position-> x: [%f], y: [%f], z: [%f]", msg->pose.pose.position.x,msg->pose.pose.position.y, msg->pose.pose.position.z);
 
 	// Checking Euclidean distanc between current pose x and y and pick up/drop off goal positions x and y
-	
-	float pickUpThreshold = sqrt( (pow(msg->pose.pose.position.x,2) - pow(PICKUP_X_GOAL,2)) + (pow(msg->pose.pose.position.y,2) - pow(PICKUP_Y_GOAL,2)) );		
-	float dropOffThreshold = sqrt( (pow(msg->pose.pose.position.x,2) - pow(DROPOFF_X_GOAL,2)) + (pow(msg->pose.pose.position.y,2) - pow(DROPOFF_Y_GOAL,2)) );
+	float pickUpThreshold = sqrt( abs((pow(msg->pose.pose.position.x,2) - pow(PICKUP_X_GOAL,2))) + abs((pow(msg->pose.pose.position.y,2) - pow(PICKUP_Y_GOAL,2))) );		
+	float dropOffThreshold = sqrt( abs((pow(msg->pose.pose.position.x,2) - pow(DROPOFF_X_GOAL,2))) + abs((pow(msg->pose.pose.position.y,2) - pow(DROPOFF_Y_GOAL,2))) );
 
-	ROS_INFO("pickUpThreshold: [%f]",pickUpThreshold);
+	#ifdef DEBUG == 1	
+		ROS_INFO("pickUpThreshold: [%f]",pickUpThreshold);
+		ROS_INFO("dropOffThreshold: [%f]",dropOffThreshold);
+	#endif
 
-	if (pickUpThreshold < 0.8)
+	if (pickUpThreshold < 0.5 && isAtPickup == false)
 	{
-		isAtPickup = true;
+		isAtPickup = true; //remains unchanged after robot has reached initial pick up goal
 		ROS_INFO("Odometry -> At PICK UP GOAL");
 	}
-
-	if (dropOffThreshold < 0.8)
+	else if (dropOffThreshold < 0.5 && isAtDropOff == false && isAtPickup == true)
 	{
 		isAtDropOff = true;
 		ROS_INFO("Odometry -> At DROP OFF GOAL");
@@ -50,7 +53,7 @@ int main( int argc, char** argv )
   ros::Rate r(1);
   ros::Publisher marker_pub = n.advertise<visualization_msgs::Marker>("visualization_marker", 1);
 
-  // Subscribe to /odometry topic to determine if the robot is near the pick up and drop off goal positions
+  // Subscribe to /amcl_pose topic to determine if the robot is near the pick up and drop off goal positions
   ros::Subscriber sub1 = n.subscribe("/amcl_pose", 100, checkGoalProximity);
 
   // Set our initial shape type to be a cube
@@ -60,7 +63,7 @@ int main( int argc, char** argv )
   {
     visualization_msgs::Marker marker;
     // Set the frame ID and timestamp.  See the TF tutorials for information on these.
-    marker.header.frame_id = "map";
+    marker.header.frame_id = "/map";
     marker.header.stamp = ros::Time::now();
 
     // Set the namespace and id for this marker.  This serves to create a unique ID
@@ -96,7 +99,7 @@ int main( int argc, char** argv )
     marker.color.b = 0.0f;
     marker.color.a = 1.0;
 
-    marker.lifetime = ros::Duration(); 
+    //marker.lifetime = ros::Duration(); 
 
     // Publish the marker
     while (marker_pub.getNumSubscribers() < 1)
@@ -109,50 +112,37 @@ int main( int argc, char** argv )
       sleep(1);
     }
 
-	// ----------------Robot Reaches Drop Off Goal----------------//
-	// Display Marker again when robot is near Drop Off Goal
-	// Make it re-appear once robot has 'dropped off" the marker
-	if (isAtDropOff == true)
-	{
-		marker.action = visualization_msgs::Marker::ADD;
-		ros::Duration(1.0).sleep();
-	    marker_pub.publish(marker);
-	}
-	
 	// ----------------Robot Reaches Pick Up Goal----------------//
 	// Only display Marker when robot is near Pickup Goal
 	// Make it disappear once robot has 'picked up' the marker
 	if (isAtPickup == true)
 	{
 	    marker.action = visualization_msgs::Marker::DELETE;
-		ros::Duration(1.0).sleep();
-	    marker_pub.publish(marker);
+		ROS_INFO("Marker - [Deleted] Picked Up");
+        marker_pub.publish(marker);
+		ros::Duration(2.0).sleep();
+	}
+
+	// ----------------Robot Reaches Drop Off Goal----------------//
+	// Display Marker again when robot is near Drop Off Goal
+	// Make it re-appear once robot has 'dropped off" the marker
+	else if (isAtDropOff == true)
+	{
+		marker.action = visualization_msgs::Marker::ADD;
+    	marker.pose.position.x = DROPOFF_X_GOAL;
+	    marker.pose.position.y = DROPOFF_Y_GOAL;
+		ROS_INFO("Marker - [Added] Dropped Off");
+		marker_pub.publish(marker);
+		ros::Duration(2.0).sleep();
 	}
 	else
 	{
-		marker_pub.publish(marker);
+		marker_pub.publish(marker); //publish marker at pick up goal until robot arrives there
 	}
 
-
-	/*
-    // Cycle between different shapes
-    switch (shape)
-    {
-    case visualization_msgs::Marker::CUBE:
-      shape = visualization_msgs::Marker::SPHERE;
-      break;
-    case visualization_msgs::Marker::SPHERE:
-      shape = visualization_msgs::Marker::ARROW;
-      break;
-    case visualization_msgs::Marker::ARROW:
-      shape = visualization_msgs::Marker::CYLINDER;
-      break;
-    case visualization_msgs::Marker::CYLINDER:
-      shape = visualization_msgs::Marker::CUBE;
-      break;
-    }
-    */
-
-    r.sleep();
+    // Handle ROS communication events
+    ros::spinOnce();    
+	
+	r.sleep();
   }
 }
