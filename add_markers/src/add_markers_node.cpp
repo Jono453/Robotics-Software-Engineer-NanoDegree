@@ -1,13 +1,14 @@
 #include <ros/ros.h>
 #include <visualization_msgs/Marker.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
+#include <geometry_msgs/Twist.h>
 
 /*
 First Goal = desired pickup goal (1.0,6.5)
 Second Goal = desired drop off goal (-0.4,-4.8)
 */
 
-#define DEBUG 1
+//#define DEBUG
 
 #define PICKUP_X_GOAL 1.0
 #define PICKUP_Y_GOAL 6.5
@@ -16,6 +17,21 @@ Second Goal = desired drop off goal (-0.4,-4.8)
 
 bool isAtPickup = false;
 bool isAtDropOff = false;
+bool restAtGoal = false;
+
+void VelocityCallback(const geometry_msgs::Twist& msg)
+{
+
+	if (msg.linear.x <= 0.1 && msg.linear.y <= 0.1)
+	{
+		restAtGoal = true;
+		//ROS_INFO("--ROBOT is at Rest in Goal!--");
+	}
+	else
+	{
+		restAtGoal = false;
+	}
+}
 
 // This callback function continuously executes and reads the odometry from robot /amcl_pose topic
 // Message header notes at http://docs.ros.org/en/api/geometry_msgs/html/msg/PoseWithCovariance.html
@@ -28,19 +44,21 @@ void checkGoalProximity(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr
 	float pickUpThreshold = sqrt( abs((pow(msg->pose.pose.position.x,2) - pow(PICKUP_X_GOAL,2))) + abs((pow(msg->pose.pose.position.y,2) - pow(PICKUP_Y_GOAL,2))) );		
 	float dropOffThreshold = sqrt( abs((pow(msg->pose.pose.position.x,2) - pow(DROPOFF_X_GOAL,2))) + abs((pow(msg->pose.pose.position.y,2) - pow(DROPOFF_Y_GOAL,2))) );
 
-	#ifdef DEBUG == 1	
+	#ifdef DEBUG	
 		ROS_INFO("pickUpThreshold: [%f]",pickUpThreshold);
 		ROS_INFO("dropOffThreshold: [%f]",dropOffThreshold);
 	#endif
 
-	if (pickUpThreshold < 0.5 && isAtPickup == false)
+	if (pickUpThreshold <= 0.1 && isAtPickup == false && restAtGoal == true)
 	{
 		isAtPickup = true; //remains unchanged after robot has reached initial pick up goal
+		restAtGoal = false; //reset
 		ROS_INFO("Odometry -> At PICK UP GOAL");
 	}
-	else if (dropOffThreshold < 0.5 && isAtDropOff == false && isAtPickup == true)
+	else if (dropOffThreshold <= 0.1 && isAtDropOff == false && isAtPickup == true && restAtGoal == true)
 	{
 		isAtDropOff = true;
+		restAtGoal = false; //reset
 		ROS_INFO("Odometry -> At DROP OFF GOAL");
 	}
 
@@ -55,6 +73,8 @@ int main( int argc, char** argv )
 
   // Subscribe to /amcl_pose topic to determine if the robot is near the pick up and drop off goal positions
   ros::Subscriber sub1 = n.subscribe("/amcl_pose", 100, checkGoalProximity);
+  // Subscribe to /cmd_vel to assist with determining if robot is really at goal and ready to pick up or drop off marker
+  ros::Subscriber sub2 = n.subscribe("/cmd_vel", 100, VelocityCallback);
 
   // Set our initial shape type to be a cube
   uint32_t shape = visualization_msgs::Marker::CUBE;
@@ -118,25 +138,28 @@ int main( int argc, char** argv )
 	if (isAtPickup == true)
 	{
 	    marker.action = visualization_msgs::Marker::DELETE;
-		ROS_INFO("Marker - [Deleted] Picked Up");
+		ROS_WARN_ONCE("Marker - [Deleted] Picked Up");
         marker_pub.publish(marker);
 		ros::Duration(2.0).sleep();
 	}
 
 	// ----------------Robot Reaches Drop Off Goal----------------//
-	// Display Marker again when robot is near Drop Off Goal
+	// Display Marker again ONLY when robot is near Drop Off Goal
 	// Make it re-appear once robot has 'dropped off" the marker
-	else if (isAtDropOff == true)
+	if (isAtDropOff == true && isAtPickup == true)
 	{
 		marker.action = visualization_msgs::Marker::ADD;
     	marker.pose.position.x = DROPOFF_X_GOAL;
 	    marker.pose.position.y = DROPOFF_Y_GOAL;
-		ROS_INFO("Marker - [Added] Dropped Off");
+		ROS_WARN_ONCE("Marker - [Added] Dropped Off");
 		marker_pub.publish(marker);
-		ros::Duration(2.0).sleep();
-	}
-	else
-	{
+		ROS_INFO("Completed Home Service Simulation");
+		ros::Duration(5.0).sleep();
+		return 0;
+	}	
+
+	if (isAtDropOff == false && isAtPickup == false)
+	{	
 		marker_pub.publish(marker); //publish marker at pick up goal until robot arrives there
 	}
 
