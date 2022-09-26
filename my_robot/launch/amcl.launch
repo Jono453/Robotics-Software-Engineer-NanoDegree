@@ -39,12 +39,4 @@
   <node name="rviz" pkg= "rviz" type="rviz" output="screen" args="-d $(find my_robot)/home_service_rviz.rviz">
   </node>
 
-  <!-- Gmapping_SLAM -->
-  <node name="gmapper" pkg="gmapping" type="slam_gmapping" args=""  output="screen">
-    <param name="scan_frame" value="/scan"/>
-    <param name="odom_frame" value="odom"/>
-    <param name="base_frame" value="robot_footprint"/>
-    <param name="map_frame" value="map"/>
-  </node>
-
 </launch>

@@ -4,9 +4,8 @@
   <!-- SLAM gMapping Node -->
   <node pkg="gmapping" type="slam_gmapping" name="slam_gmappping" output="screen">
       <param name="base_frame" type="string" value="robot_footprint"/>
+      <param name="scan_frame" value="/scan"/>
 	  <param name="odom_frame" type="string" value="odom"/>
       <remap from="scan" to="/scan"/>      
   </node>
 </launch>
-
-
